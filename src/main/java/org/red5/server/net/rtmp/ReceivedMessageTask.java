@@ -1,7 +1,26 @@
+/*
+ * RED5 Open Source Flash Server - https://github.com/Red5/
+ * 
+ * Copyright 2006-2015 by respective authors (see below). All rights reserved.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.red5.server.net.rtmp;
 
 import java.util.Date;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.red5.server.api.Red5;
@@ -11,117 +30,123 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-public final class ReceivedMessageTask implements Callable<Boolean> {
+/**
+ * Wraps processing of incoming messages.
+ * 
+ * @author Paul Gregoire (mondain@gmail.com)
+ */
+public final class ReceivedMessageTask implements Callable<Packet> {
 
 	private final static Logger log = LoggerFactory.getLogger(ReceivedMessageTask.class);
-	
+
 	private final RTMPConnection conn;
-	
+
 	private final IRTMPHandler handler;
 
 	private final String sessionId;
-	
-	private Packet message;
 
-	// flag representing handling status
-	private final AtomicBoolean done = new AtomicBoolean(false);
+	private Packet packet;
 
-	// maximum time allowed to process received message
-	private long maxHandlingTime = 500L;
-	
-	public ReceivedMessageTask(String sessionId, Packet message, IRTMPHandler handler) {
-		this(sessionId, message, handler, (RTMPConnection) RTMPConnManager.getInstance().getConnectionBySessionId(sessionId));
+	private long packetNumber;
+
+	private final AtomicBoolean processing = new AtomicBoolean(false);
+
+	private Thread taskThread;
+
+	private ScheduledFuture<Runnable> deadlockFuture;
+
+	public ReceivedMessageTask(String sessionId, Packet packet, IRTMPHandler handler) {
+		this(sessionId, packet, handler, (RTMPConnection) RTMPConnManager.getInstance().getConnectionBySessionId(sessionId));
 	}
-	
-	public ReceivedMessageTask(String sessionId, Packet message, IRTMPHandler handler, RTMPConnection conn) {
+
+	public ReceivedMessageTask(String sessionId, Packet packet, IRTMPHandler handler, RTMPConnection conn) {
 		this.sessionId = sessionId;
-		this.message = message;
+		this.packet = packet;
 		this.handler = handler;
 		this.conn = conn;
-	}	
+	}
 
-	public Boolean call() throws Exception {
+	public Packet call() throws Exception {
+		//keep a ref for executor thread
+		taskThread = Thread.currentThread();
 		// set connection to thread local
 		Red5.setConnectionLocal(conn);
 		try {
-			// don't run the deadlock guard if timeout is <= 0
-			if (maxHandlingTime > 0) {
-				// run a deadlock guard so hanging tasks will be interrupted
-				ThreadPoolTaskScheduler deadlockGuard = conn.getDeadlockGuardScheduler();
-				if (deadlockGuard != null) {
-					try {
-						deadlockGuard.schedule(new DeadlockGuard(Thread.currentThread()),
-								new Date(System.currentTimeMillis() + maxHandlingTime));
-					} catch (TaskRejectedException e) {
-						log.warn("DeadlockGuard task is rejected for " + sessionId, e);
-					}
-				} else {
-					log.error("Deadlock guard is null for {}", sessionId);
-				}
-			}
 			// pass message to the handler
-			handler.messageReceived(conn, message);
-		} catch (Exception e) {
-			log.error("Error processing received message {} on {}", message, sessionId, e);
+			handler.messageReceived(conn, packet);
+			// if we get this far, set done / completed flag
+			packet.setProcessed(true);
 		} finally {
-			//log.info("[{}] run end", sessionId);
 			// clear thread local
 			Red5.setConnectionLocal(null);
-			// set done / completed flag
-			done.set(true);
 		}
-		return done.get();
-	}
-	
-	/**
-	 * Sets maximum handling time for an incoming message.
-	 * 
-	 * @param maxHandlingTimeout maximum handling timeout
-	 */
-	public void setMaxHandlingTimeout(long maxHandlingTimeout) {
-		this.maxHandlingTime = maxHandlingTimeout;
+		if (log.isDebugEnabled()) {
+			log.debug("Processing message for {} is processed: {} packet #{}", sessionId, packet.isProcessed(), packetNumber);
+		}
+		return packet;
 	}
 
 	/**
-	 * Prevents deadlocked message handling.
+	 * Runs deadlock guard task
+	 *
+	 * @param deadlockGuardTask deadlock guard task
 	 */
-	private class DeadlockGuard implements Runnable {
-		
-		// executor task thread
-		private final Thread taskThread;
-		
-		/**
-		 * Creates the deadlock guard to prevent a message task from taking too long to process.
-		 * @param thread
-		 */
-		private DeadlockGuard(Thread taskThread) {
-			// executor thread ref
-			this.taskThread = taskThread;
-			if (log.isTraceEnabled()) {
-				log.trace("DeadlockGuard is created for {}", sessionId);
-			}
-		}
-		
-		/**
-		 * Save the reference to the thread, and wait until the maxHandlingTimeout has elapsed.
-		 * If it elapsed, kill the other thread.
-		 * */
-		public void run() {
-			if (log.isTraceEnabled()) {
-				log.trace("DeadlockGuard is started for {}", sessionId);
-			}
-			// if the message task is not yet done interrupt
-			if (!done.get()) {
-				// if the task thread hasn't been interrupted check its live-ness
-				// if the task thread is alive, interrupt it
-				if (!taskThread.isInterrupted() && taskThread.isAlive()) {
-					log.warn("Interrupting unfinished active task on {}", sessionId);
-					taskThread.interrupt();
-				} else {
-					log.debug("Unfinished active task on {} already interrupted", sessionId);					
+	@SuppressWarnings("unchecked")
+    public void runDeadlockFuture(Runnable deadlockGuardTask) {
+		if (deadlockFuture == null) {
+			ThreadPoolTaskScheduler deadlockGuard = conn.getDeadlockGuardScheduler();
+			if (deadlockGuard != null) {
+				try {
+					deadlockFuture = (ScheduledFuture<Runnable>) deadlockGuard.schedule(deadlockGuardTask, new Date(packet.getExpirationTime()));
+				} catch (TaskRejectedException e) {
+					log.warn("DeadlockGuard task is rejected for {}", sessionId, e);
 				}
+			} else {
+				log.error("Deadlock guard is null for {}", sessionId);
 			}
+		} else {
+			log.error("Deadlock future is already create for {}", sessionId);
 		}
+	}
+
+	/**
+	 * Cancels deadlock future if it was created
+	 */
+	public void cancelDeadlockFuture() {
+		// kill the future for the deadlock since processing is complete
+		if (deadlockFuture != null) {
+			deadlockFuture.cancel(true);
+		}
+	}
+
+	/**
+	 * Marks task as processing if it is not prosessing yet.
+	 *
+	 * @return true if successful, or false otherwise
+	 */
+	public boolean setProcessing() {
+		return processing.compareAndSet(false, true);
+	}
+
+	public long getPacketNumber() {
+		return packetNumber;
+	}
+
+	public void setPacketNumber(long packetNumber) {
+		this.packetNumber = packetNumber;
+	}
+
+	public Packet getPacket() {
+		return packet;
+	}
+
+	public Thread getTaskThread() {
+		return taskThread;
+	}
+
+	@Override
+	public String toString() {
+		return "[sessionId: " + sessionId + "; packetNumber: " + packetNumber + "; processing: " + processing.get() + "]";
 	}
 	
 }

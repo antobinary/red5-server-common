@@ -19,9 +19,7 @@
 package org.red5.server.stream;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -192,7 +190,7 @@ public class PlaylistSubscriberStream extends AbstractClientStream implements IP
 
 				engine = new PlayEngine.Builder(this, schedulingService, consumerService, providerService).build();
 			} else {
-				log.info("Scope was null on start");
+				throw new IllegalStateException("Scope was null on start playing");
 			}
 		}
 		//set buffer check interval
@@ -266,7 +264,11 @@ public class PlaylistSubscriberStream extends AbstractClientStream implements IP
 		try {
 			engine.stop();
 		} catch (IllegalStateException e) {
-			log.debug("stop caught an IllegalStateException");
+			if (log.isTraceEnabled()) {
+				log.warn("stop caught an IllegalStateException", e);
+			} else if (log.isDebugEnabled()) {
+				log.debug("stop caught an IllegalStateException");
+			}
 		}
 	}
 

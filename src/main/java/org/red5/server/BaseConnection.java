@@ -139,15 +139,15 @@ public abstract class BaseConnection extends AttributeStore implements IConnecti
 	private final transient Semaphore writeLock = new Semaphore(1, true);
 
 	// Support for stream ids
-	private transient ThreadLocal<Integer> streamLocal = new ThreadLocal<Integer>();
+	private transient ThreadLocal<Number> streamLocal = new ThreadLocal<Number>();
 
 	/** {@inheritDoc} */
-	public int getStreamId() {
-		return streamLocal.get().intValue();
+	public Number getStreamId() {
+		return streamLocal.get();
 	}
 
 	/** {@inheritDoc} */
-	public void setStreamId(int id) {
+	public void setStreamId(Number id) {
 		streamLocal.set(id);
 	}
 
@@ -223,16 +223,22 @@ public abstract class BaseConnection extends AttributeStore implements IConnecti
 	 * @param client        Client bound to connection
 	 */
 	public void initialize(IClient client) {
-		log.debug("initialize - client: {}", client);
+		if (log.isDebugEnabled()) {
+			log.debug("initialize - client: {}", client);
+		}
 		if (this.client != null && this.client instanceof Client && !this.client.equals(client)) {
 			// unregister old client
-			log.trace("Unregistering previous client: {}", this.client);
+			if (log.isTraceEnabled()) {
+				log.trace("Unregistering previous client: {}", this.client);
+			}
 			((Client) this.client).unregister(this, false);
 		}
 		this.client = client;
 		if (this.client instanceof Client && !((Client) this.client).isRegistered(this)) {
 			// register new client
-			log.trace("Registering client: {}", this.client);
+			if (log.isTraceEnabled()) {
+				log.trace("Registering client: {}", this.client);
+			}
 			((Client) this.client).register(this);
 		}
 	}
@@ -540,11 +546,12 @@ public abstract class BaseConnection extends AttributeStore implements IConnecti
 	}
 
 	/**
-	 *
+	 * Count of outgoing video messages not yet written.
+	 * 
 	 * @param streamId the id you want to know about
 	 * @return pending messages for this streamId
 	 */
-	public long getPendingVideoMessages(int streamId) {
+	public long getPendingVideoMessages(Number streamId) {
 		return 0;
 	}
 
