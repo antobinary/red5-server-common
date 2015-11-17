@@ -119,6 +119,9 @@ public abstract class RTMPConnection extends BaseConnection implements IStreamCa
 	 */
 	public static final String RTMPE_CIPHER_OUT = "rtmpe.cipher.out";
 
+	// ~320 streams seems like a sufficient max amount of streams for a single connection
+	public static final double MAX_RESERVED_STREAMS = 320;
+
 	/**
 	 * Initial channel capacity
 	 */
@@ -629,18 +632,22 @@ public abstract class RTMPConnection extends BaseConnection implements IStreamCa
 	}
 	
 	public Map<Number, IClientStream> getStreamsMap() {
-		return streams;
+		return Collections.unmodifiableMap(streams);
 	}
 
 	/** {@inheritDoc} */
 	public Number reserveStreamId() {
-		// ~320 streams seems like a sufficient max amount of streams for a single connection
 		double d = 1.0d;
-		for (; d < 320.0d; d++) {
+		for (; d < MAX_RESERVED_STREAMS; d++) {
 			if (reservedStreams.add(d)) {
 				break;
 			}
 		}
+
+		if (d == MAX_RESERVED_STREAMS) {
+			throw new IndexOutOfBoundsException("Unable to reserve new stream");
+		}
+		
 		return d;
 	}
 
@@ -666,7 +673,7 @@ public abstract class RTMPConnection extends BaseConnection implements IStreamCa
 		if (log.isTraceEnabled()) {
 			log.trace("Checking validation for streamId {}; reservedStreams: {}; streams: {}, connection: {}", new Object[] { d, reservedStreams, streams, sessionId });
 		}
-		if (d < 0 || !reservedStreams.contains(d)) {
+		if (d <= 0 || !reservedStreams.contains(d)) {
 			log.warn("Stream id: {} was not reserved in connection {}", d, sessionId);
 			// stream id has not been reserved before
 			return false;
