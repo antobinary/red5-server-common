@@ -4,6 +4,9 @@
         <encoder>
             <pattern>[%p] [%thread] %logger - %msg%n</pattern>
         </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
     </appender>
 <!-- 
     <appender class="ch.qos.logback.core.FileAppender" name="FILE">
@@ -14,16 +17,14 @@
             </pattern>
         </encoder>
     </appender>
--->
+ -->
     <root level="TRACE">
         <appender-ref ref="CONSOLE" />
 <!-- 
         <appender-ref ref="FILE" />
--->
+ -->
     </root>
-<!-- 
-    <logger name="org.springframework" level="INFO" />
-    <logger name="org.apache" level="INFO" />
--->
+    <!-- <logger name="org.springframework" level="INFO" /> <logger name="org.apache" 
+        level="INFO" /> -->
     <logger name="org.quartz" level="OFF" />
 </configuration>
