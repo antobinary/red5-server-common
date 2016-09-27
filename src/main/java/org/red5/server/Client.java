@@ -355,7 +355,9 @@ public class Client extends AttributeStore implements IClient {
 		}
 		if (cd.containsKey("attributes")) {
 			AttributeStore attrs = (AttributeStore) cd.get("attributes");
-			instance.setAttributes(attrs);
+			if (instance != null) {
+				instance.setAttributes(attrs);
+			}
 		}
 		return instance;
 	}
