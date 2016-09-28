@@ -48,12 +48,32 @@ public class FileUtil {
 
 	public static void copyFile(File source, File dest) throws IOException {
 		log.debug("Copy from {} to {}", source.getAbsoluteFile(), dest.getAbsoluteFile());
-		FileInputStream fi = new FileInputStream(source);
-		FileChannel fic = fi.getChannel();
-		MappedByteBuffer mbuf = fic.map(FileChannel.MapMode.READ_ONLY, 0, source.length());
-		fic.close();
-		fi.close();
-		fi = null;
+
+		FileInputStream fi = null;
+		FileChannel fic = null;
+		MappedByteBuffer mbuf = null;
+		try {
+			fi = new FileInputStream(source);
+			fic = fi.getChannel();
+			mbuf = fic.map(FileChannel.MapMode.READ_ONLY, 0, source.length());
+		} finally {
+			if (fic != null) {
+				try {
+					fic.close();
+				} catch (IOException ex) {
+					log.warn("Failed to close input stream.");
+				}
+			}
+			if (fi != null) {
+				try {
+					fi.close();
+					fi = null;
+				} catch (IOException ex) {
+					log.warn("Failed to close file input stream channel.");
+				}
+
+			}
+		}
 
 		// ensure the destination directory exists
 		if (!dest.exists()) {
@@ -72,15 +92,34 @@ public class FileUtil {
 			dir = null;
 		}
 
-		FileOutputStream fo = new FileOutputStream(dest);
-		FileChannel foc = fo.getChannel();
-		foc.write(mbuf);
-		foc.close();
-		fo.close();
-		fo = null;
+		FileOutputStream fo = null;
+		FileChannel foc = null;
 
-		mbuf.clear();
-		mbuf = null;
+		try {
+			fo = new FileOutputStream(dest);
+			foc = fo.getChannel();
+			foc.write(mbuf);
+
+		} finally {
+			if (foc != null) {
+				try {
+					foc.close();
+				} catch (IOException ex) {
+					log.warn("Failed to close output stream channel.");
+				}
+			}
+			if (fo != null) {
+				try {
+					fo.close();
+					fo = null;
+				} catch (IOException ex) {
+					log.warn("Failed to close output stream.");
+				}
+			}
+
+			mbuf.clear();
+			mbuf = null;
+		}
 	}
 
 	public static void copyFile(String source, String dest) throws IOException {
@@ -337,10 +376,11 @@ public class FileUtil {
 		log.debug("Parent: {}", (parent != null ? parent.getName() : null));
 		//File tmpDir = new File(System.getProperty("java.io.tmpdir"), dirName);
 		File tmpDir = new File(destinationDir);
-
 		// make the war directory
 		log.debug("Making directory: {}", tmpDir.mkdirs());
 		ZipFile zf = null;
+		FileOutputStream fout = null;
+		InputStream in = null;
 		try {
 			zf = new ZipFile(compressedFileName);
 			Enumeration<?> e = zf.entries();
@@ -370,11 +410,9 @@ public class FileUtil {
 				}
 
 				// creates the file
-				FileOutputStream fout = new FileOutputStream(tmpDir + "/" + ze.getName());
-				InputStream in = zf.getInputStream(ze);
+				fout = new FileOutputStream(tmpDir + "/" + ze.getName());
+				in = zf.getInputStream(ze);
 				copy(in, fout);
-				in.close();
-				fout.close();
 			}
 			e = null;
 		} catch (IOException e) {
@@ -385,6 +423,20 @@ public class FileUtil {
 				try {
 					zf.close();
 				} catch (IOException e) {
+				}
+			}
+			if (fout != null) {
+				try {
+					fout.close();
+				} catch (IOException ex) {
+					log.warn("Failed to close output stream.");
+				}
+			}
+			if (in != null) {
+				try {
+					in.close();
+				} catch (IOException ex) {
+					log.warn("Failed to close input stream.");
 				}
 			}
 		}
