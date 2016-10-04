@@ -18,7 +18,7 @@
 
 package org.red5.server.stream;
 
-import java.util.Random;
+import java.security.SecureRandom;
 
 import org.red5.server.api.stream.IPlaylist;
 import org.red5.server.api.stream.IPlaylistController;
@@ -43,7 +43,7 @@ public class SimplePlaylistController implements IPlaylistController {
 			if (playlist.getItemSize() > 1) {
 				// continuously generate a random number
 				// until you get one that was not the last...
-				Random rand = new Random();
+				SecureRandom rand = new SecureRandom();
 				while (itemIndex == lastIndex) {
 					itemIndex = rand.nextInt(playlist.getItemSize());
 				}
@@ -74,7 +74,7 @@ public class SimplePlaylistController implements IPlaylistController {
 		}
 
 		if (playlist.isRandom()) {
-			Random rand = new Random();
+			SecureRandom rand = new SecureRandom();
 			int lastIndex = itemIndex;
 			// continuously generate a random number
 			// until you get one that was not the last...

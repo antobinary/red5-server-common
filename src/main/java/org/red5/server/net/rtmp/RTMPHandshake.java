@@ -27,7 +27,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Security;
 import java.security.spec.KeySpec;
-import java.util.Random;
+import java.security.SecureRandom;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
@@ -114,7 +114,7 @@ public abstract class RTMPHandshake implements IHandshake {
 
     protected static final int KEY_LENGTH = 128;
     
-	protected static final Random random = new Random();
+	protected static final SecureRandom random = new SecureRandom();
 	
 	protected KeyAgreement keyAgreement;
 	

@@ -20,7 +20,7 @@ package org.red5.server.stream.bandwidth;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
+import java.security.SecureRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.red5.server.api.IConnection;
@@ -89,7 +89,7 @@ public class ServerClientDetection implements IPendingServiceCallback, IBandwidt
 		// set local connection ref
 		this.conn = conn;
 		// get random generator
-		Random rnd = new Random();
+		SecureRandom rnd = new SecureRandom();
 		rnd.nextBytes(payload);
 		rnd.nextBytes(payload1);
 		// get the current bytes written on the connection

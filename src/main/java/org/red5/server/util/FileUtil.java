@@ -28,7 +28,7 @@ import java.io.OutputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Enumeration;
-import java.util.Random;
+import java.security.SecureRandom;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -514,7 +514,7 @@ public class FileUtil {
 	 * @return custom name
 	 */
 	public static String generateCustomName() {
-		Random random = new Random();
+		SecureRandom random = new SecureRandom();
 		StringBuilder sb = new StringBuilder();
 		sb.append(PropertyConverter.getCurrentTimeSeconds());
 		sb.append('_');
