@@ -413,6 +413,8 @@ public class FileUtil {
 				fout = new FileOutputStream(tmpDir + "/" + ze.getName());
 				in = zf.getInputStream(ze);
 				copy(in, fout);
+				fout.close();
+				in.close();
 			}
 			e = null;
 		} catch (IOException e) {
